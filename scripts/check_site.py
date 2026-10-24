@@ -13,7 +13,7 @@ import re
 import sys
 from urllib.parse import urlsplit
 
-from export_public import ExportError, digest, require, validate_site
+from export_public import ExportError, digest, load_exclusions, png_dimensions, require, validate_site
 
 
 class References(HTMLParser):
@@ -44,6 +44,15 @@ def check(root: Path) -> dict:
     expected |= {p.removeprefix("site/") for p in provenance["newFiles"] if p.startswith("site/")}
     expected |= {"bootstrap.js", "data/research.json"}
     expected |= {p["url"] for p in data["photos"]["items"]}
+    reviews = json.loads((root / "docs/image-review.json").read_text(encoding="utf-8"))
+    assets = {}
+    for review in reviews["images"]:
+        if "path" not in review:
+            continue
+        name = review["path"]
+        require(isinstance(name, str) and re.fullmatch(r"assets/[A-Za-z0-9_.-]+\.png", name) and name not in assets, "invalid_reviewed_asset_path")
+        assets[name] = review
+    expected.update(assets)
     found = set()
     for path in site.rglob("*"):
         require(not path.is_symlink(), "site_symlink_not_allowed")
@@ -54,14 +63,20 @@ def check(root: Path) -> dict:
         if name not in provenance["adaptedFiles"]:
             require(digest((site / name).read_bytes()) == checksum, "upstream_visual_asset_changed")
 
-    reviews = json.loads((root / "docs/image-review.json").read_text(encoding="utf-8"))
+    # 句との対応がない静的画像も、確認記録の一枚だけを許可する。画像の追加や
+    # 差替えは名前だけでは通さず、目視確認したbytes・寸法・PNG構造を照合する。
+    for name, review in assets.items():
+        require(review.get("review") == "approved_for_initial_publication", "asset_visual_review_required")
+        original = (site / name).read_bytes()
+        require(digest(original) == review.get("sha256"), "asset_image_review_mismatch")
+        require(png_dimensions(original) == (review.get("width"), review.get("height")), "asset_image_dimensions_mismatch")
     approved = {r["sha256"] for r in reviews["images"] if r.get("review") == "approved_for_initial_publication"}
     require(all(item["sha256"] in approved for item in data["photos"]["items"]), "image_visual_review_required")
-    exclusions = json.loads((root / "docs/publication-exclusions.json").read_text(encoding="utf-8"))
-    excluded = set(exclusions["dialogueIds"])
+    excluded = load_exclusions(root / "docs/publication-exclusions.json")
     published = {turn["id"] for poem in data["poems"] for turn in poem["dialogue"]}
     require(not published & excluded, "reviewed_private_dialogue_was_published")
-    require(result["excluded"]["reviewedDialogueTurns"] == len(excluded), "reviewed_exclusion_count_mismatch")
+    # 件数は選択版で実際に除いた相談数。削除句や旧版だけのIDもmanifestに残す。
+    require(result["excluded"]["reviewedDialogueTurns"] <= len(excluded), "reviewed_exclusion_count_mismatch")
 
     page = References()
     html = (site / "index.html").read_text(encoding="utf-8")

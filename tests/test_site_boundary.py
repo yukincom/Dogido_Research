@@ -38,9 +38,39 @@ class SiteBoundary(unittest.TestCase):
     def test_new_images_need_visual_review(self):
         path = self.root / "docs/image-review.json"
         review = json.loads(path.read_text())
-        review["images"] = []
+        review["images"] = [row for row in review["images"] if "path" in row]
         path.write_text(json.dumps(review))
         with self.assertRaisesRegex(ExportError, "image_visual_review_required"):
+            check(self.root)
+
+    def test_inactive_exclusions_remain_valid_and_out_of_published_dialogue(self):
+        data = self.data()
+        data["publication"]["excluded"]["reviewedDialogueTurns"] = 0
+        self.write_data(data)
+        self.assertEqual(check(self.root)["excluded"]["reviewedDialogueTurns"], 0)
+
+    def test_registered_static_image_cannot_be_replaced_without_review(self):
+        path = self.root / "site/assets/dogido_2026-10-22_09.35.09.png"
+        path.write_bytes(path.read_bytes() + b"unreviewed-change")
+        with self.assertRaisesRegex(ExportError, "asset_image_review_mismatch"):
+            check(self.root)
+
+    def test_static_image_needs_explicit_visual_approval(self):
+        path = self.root / "docs/image-review.json"
+        review = json.loads(path.read_text())
+        for row in review["images"]:
+            if row.get("path") == "assets/dogido_2026-10-22_09.35.09.png":
+                row["review"] = "pending"
+        path.write_text(json.dumps(review))
+        with self.assertRaisesRegex(ExportError, "asset_visual_review_required"):
+            check(self.root)
+
+    def test_exclusion_count_cannot_exceed_the_manifest(self):
+        data = self.data()
+        exclusions = json.loads((self.root / "docs/publication-exclusions.json").read_text())
+        data["publication"]["excluded"]["reviewedDialogueTurns"] = len(exclusions["dialogueIds"]) + 1
+        self.write_data(data)
+        with self.assertRaisesRegex(ExportError, "reviewed_exclusion_count_mismatch"):
             check(self.root)
 
     def test_excluded_dialogue_cannot_return(self):

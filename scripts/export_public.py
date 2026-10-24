@@ -56,6 +56,7 @@ def public_id(kind, source):
 
 def dialogue_id(source_id, turn):
     """確認済みturnの識別子から公開IDを作る。並び順や本文の修正では変わらない。"""
+    require(isinstance(turn, dict) and all(isinstance(turn.get(k), str) and turn[k] for k in ("workshopId", "turnId", "eventId")), "missing_dialogue_identity")
     source = json.dumps([source_id, turn["workshopId"], turn["turnId"], turn["eventId"]], ensure_ascii=False, separators=(",", ":"))
     return public_id("dialogue", source)
 
@@ -305,15 +306,13 @@ class DialogueProof:
             origins = defaultdict(list)
             for row in self.memory.jsonl(base + "short_term/current_session.jsonl"):
                 require(isinstance(row, dict), "invalid_dialogue_log")
-                if row.get("type") != "dialogue_event" or row.get("kind") != "workshop_dialogue":
-                    continue
-                if row.get("private") is True or row.get("workshop_record_private") is True:
+                if row.get("type") != "dialogue_event":
                     continue
                 details = row.get("details", {})
                 require(isinstance(details, dict), "invalid_dialogue_details")
-                if details.get("private") is True or details.get("workshop_record_private") is True:
-                    continue
-                origins[(row.get("workshop_id"), details.get("input_turn_id"), row.get("event_id"))].append(row)
+                key = (row.get("workshop_id"), details.get("input_turn_id"), row.get("event_id"))
+                if all(isinstance(v, str) and v for v in key):
+                    origins[key].append(row)
             self.cache[prefix] = links, origins
         links, origins = self.cache[prefix]
         result, seen = [], set()
@@ -326,6 +325,12 @@ class DialogueProof:
             candidates = origins.get(key, [])
             require(bool(candidates), "dialogue_origin_not_found")
             for origin in candidates:
+                # 同じ識別子の非公開行を先に捨てると、公開行との競合を見落とす。
+                # 一件でも通常対話・非公開扱いなら、その本文は公開証明に使わない。
+                require(origin.get("kind") == "workshop_dialogue" and not any(
+                    owner.get(flag) is True for owner in (origin, origin["details"])
+                    for flag in ("private", "workshop_record_private")
+                ), "dialogue_origin_not_found")
                 require(links.get((origin.get("session_id", ""), key[0])) == {entry}, "dialogue_poem_link_ambiguous_or_mismatched")
                 details = origin["details"]
                 require(details.get("player_text") == turn.get("player") and details.get("dogido_text") == turn.get("dogido") and origin.get("time") == turn.get("time"), "dialogue_origin_mismatch")
@@ -461,11 +466,87 @@ def load_exclusions(path):
     return set(ids)
 
 
+class SnapshotIndex:
+    """本体の保全済み台帳から版を選ぶ。入力パスは句の保存先とhashから再構成する。
+
+    台帳のない初回コピーは一版だけ読める。複数版の新旧は推測せず、対応する
+    ready台帳・archive ID・句ID・hash・保存先の一致を必要とする。原本は変更しない。
+    """
+    def __init__(self, memory, archive_id):
+        self.memory = memory
+        self.path = "bookshelf/state.json"
+        self.raw = self.read()
+        state = decode(self.raw) if self.raw is not None else {}
+        require(isinstance(state, dict), "invalid_snapshot_index")
+        refs, storage = state.get("researchSnapshots", {}), state.get("researchStorage", {})
+        require(isinstance(refs, dict) and isinstance(storage, dict), "invalid_snapshot_index")
+        self.refs = {source: ref for source, ref in refs.items() if isinstance(ref, dict) and ref.get("archive_id") == archive_id}
+        # 別の保存先の台帳がある状態は、台帳なしの初回コピーと区別する。
+        # 古いアーカイブを指定したときに、切替後の削除や更新を無視しないため。
+        self.indexed = bool(storage) or bool(refs)
+        if self.indexed:
+            require(storage.get("archiveId") == archive_id, "snapshot_index_archive_mismatch")
+            require(storage.get("state") == "ready", "research_storage_not_ready")
+
+    def read(self):
+        if not self.memory.exists("bookshelf") or not self.memory.exists(self.path):
+            return None
+        return self.memory.read(self.path)
+
+    def select(self, directory, identity, files):
+        if not self.indexed:
+            require(len(files) == 1, "snapshot_selection_required")
+            return files[0]
+        ref = self.refs.get(identity["poem_id"])
+        require(isinstance(ref, dict), "snapshot_reference_missing")
+        sha = ref.get("sha256")
+        require(isinstance(sha, str) and HASH.fullmatch(sha), "invalid_snapshot_reference_hash")
+        require(ref.get("poem_id") == identity["poem_id"], "snapshot_reference_poem_mismatch")
+        name = sha + ".json"
+        require(ref.get("relative_path") == directory + "/snapshots/" + name, "snapshot_reference_path_mismatch")
+        require(name in files, "selected_snapshot_missing")
+        return name
+
+    def finish(self, seen):
+        require(self.refs.keys() <= seen, "indexed_poem_missing_from_archive")
+        require(self.read() == self.raw, "snapshot_index_changed_retry")
+
+
+def read_snapshot(archive, directory, identity, name):
+    """選択版と除外IDの確認に共通の、内容hash・句の同一性検査。"""
+    require(re.fullmatch(r"[0-9a-f]{64}\.json", name), "invalid_snapshot_filename")
+    raw = archive.read(directory + "/snapshots/" + name)
+    require(digest(raw) == name[:-5], "snapshot_hash_mismatch")
+    wrapper = decode(raw)
+    require(isinstance(wrapper, dict) and wrapper.get("identity") == identity, "snapshot_identity_mismatch")
+    record = wrapper.get("record")
+    require(isinstance(record, dict) and record.get("schemaVersion") == 1 and record.get("id") == identity["poem_id"], "snapshot_record_mismatch")
+    require(type(record.get("deletedFromBookshelf")) is bool, "missing_deletion_state")
+    return record
+
+
+def record_dialogue_ids(record, strict=True):
+    """除外記録の存在確認用。IDだけを返し、旧版の本文を公開候補にしない。"""
+    turns = record.get("dialogue")
+    if not strict and not isinstance(turns, list):
+        return set()
+    require(isinstance(turns, list), "invalid_dialogue_array")
+    # 削除版・旧版の不完全な識別子は存在証明にならない。公開しない行の古い形式で
+    # 更新全体を止めず、完全なIDだけ照合する。公開する選択版では全行を検証する。
+    ids = [dialogue_id(record["id"], turn) for turn in turns if strict or (
+        isinstance(turn, dict) and all(isinstance(turn.get(k), str) and turn[k] for k in ("workshopId", "turnId", "eventId"))
+    )]
+    if strict:
+        require(len(ids) == len(set(ids)), "duplicate_public_dialogue")
+    return set(ids)
+
+
 def build(archive_path, memory_path, catalog_path=None, exported_at=None, exclude_dialogue=None):
     """入力をすべて検証して公開JSONと画像bytesを返す。ファイル書込みは行わない。"""
     catalog, biomes, english = load_catalog(catalog_path)
     exclusions = load_exclusions(exclude_dialogue)
     verified_dialogue_ids = set()
+    found_exclusions, historical = set(), []
     at = exported_at or datetime.now(timezone.utc).isoformat()
     stamp(at)
     excluded = Counter({key: 0 for key in EXCLUDED_KEYS})
@@ -475,6 +556,7 @@ def build(archive_path, memory_path, catalog_path=None, exported_at=None, exclud
         marker = archive.json(".dogido-research-archive.json")
         require(marker.get("schema_version") == 1 and isinstance(marker.get("archive_id"), str), "invalid_archive_marker")
         proof, seen = DialogueProof(memory), set()
+        index = SnapshotIndex(memory, marker["archive_id"])
         for year in archive.names():
             if not re.fullmatch(r"\d{4}", year):
                 continue
@@ -488,18 +570,15 @@ def build(archive_path, memory_path, catalog_path=None, exported_at=None, exclud
                 require(source not in seen, "duplicate_poem_identity")
                 seen.add(source)
                 files = [name for name in archive.names(directory + "/snapshots") if name.endswith(".json")]
-                require(len(files) == 1, "snapshot_selection_required")
-                require(re.fullmatch(r"[0-9a-f]{64}\.json", files[0]), "invalid_snapshot_filename")
-                raw = archive.read(directory + "/snapshots/" + files[0])
-                require(digest(raw) == files[0][:-5], "snapshot_hash_mismatch")
-                wrapper = decode(raw)
-                require(wrapper.get("identity") == identity, "snapshot_identity_mismatch")
-                record = wrapper.get("record")
-                require(isinstance(record, dict) and record.get("schemaVersion") == 1 and record.get("id") == source, "snapshot_record_mismatch")
-                require(type(record.get("deletedFromBookshelf")) is bool, "missing_deletion_state")
+                selected = index.select(directory, identity, files)
+                record = read_snapshot(archive, directory, identity, selected)
+                if exclusions:
+                    found_exclusions.update(record_dialogue_ids(record, strict=False) & exclusions)
+                historical.extend((directory, identity, name) for name in files if name != selected)
                 if record["deletedFromBookshelf"]:
                     excluded["deletedPoems"] += 1
                     continue
+                record_dialogue_ids(record)
                 original, current = verse(record.get("original")), verse(record.get("current"))
                 created = record["original"].get("created_at")
                 born = stamp(created)
@@ -508,11 +587,13 @@ def build(archive_path, memory_path, catalog_path=None, exported_at=None, exclud
                 entry = source.split(":", 2)[2] if source.startswith("session:") and source.count(":") >= 2 else source.removeprefix("root:")
                 require(record["original"].get("id") == entry, "original_entry_mismatch")
                 pid = public_id("poem", source)
-                dialogue = proof.verify(source, record.get("dialogue"))
+                # 除外IDは本文の変更や句の削除後も維持する。公開する行だけを元ログで
+                # 証明し、除外済みの行や旧版を相談・材料・画像の補充に使わない。
+                turns = record["dialogue"]
+                excluded["reviewedDialogueTurns"] += sum(dialogue_id(source, row) in exclusions for row in turns)
+                dialogue = proof.verify(source, [row for row in turns if dialogue_id(source, row) not in exclusions])
                 require(not verified_dialogue_ids.intersection(row["id"] for row in dialogue), "duplicate_public_dialogue_identity")
                 verified_dialogue_ids.update(row["id"] for row in dialogue)
-                excluded["reviewedDialogueTurns"] += sum(row["id"] in exclusions for row in dialogue)
-                dialogue = [row for row in dialogue if row["id"] not in exclusions]
                 history = []
                 for revision in record.get("revisions", []):
                     require(revision.get("haiku_id") == entry, "revision_poem_mismatch")
@@ -561,7 +642,15 @@ def build(archive_path, memory_path, catalog_path=None, exported_at=None, exclud
                 if original_photo is not None:
                     require(original_photo in photo_ids, "unverified_original_photo")
                     photos["originals"]["poems:" + pid] = photo_ids[original_photo]
-    require(exclusions <= verified_dialogue_ids, "reviewed_dialogue_exclusion_not_found")
+        # 消えた相談や削除句の除外IDも、検証済みの旧保存版で存在だけを確かめる。
+        # 全版の本文をマージすると、削除・非公開化した記録が復活してしまう。
+        for directory, identity, name in historical:
+            if exclusions <= found_exclusions:
+                break
+            old = read_snapshot(archive, directory, identity, name)
+            found_exclusions.update(record_dialogue_ids(old, strict=False) & exclusions)
+        require(exclusions <= found_exclusions, "reviewed_dialogue_exclusion_not_found")
+        index.finish(seen)
     poems.sort(key=lambda p: (p["createdAt"], p["id"]), reverse=True)
     photos["items"].sort(key=lambda p: p["id"])
     data = {"schemaVersion": 1, "exportedAt": at,

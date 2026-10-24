@@ -18,6 +18,8 @@
 
 画像12枚は目視確認済み。うち4枚にはMinecraftのバイオーム・ゲーム内座標・句のHUD表示があり、8枚はHUDのない身体視点の画像です。通常の会話表示や実名等は確認されませんでした。PNGにテキスト・EXIFなどの追加メタデータはありません。
 
+追加の静的画像 `site/assets/dogido_2026-10-22_09.35.09.png` も目視確認しました。Minecraftの風景とキャラクターが写る854×480の画像で、通常対話・個人情報の表示や追加メタデータはありません。原ファイルを同じ場所・同じbytesで保持し、`docs/image-review.json` にpath・SHA-256・寸法を登録しています。配布検査はその確認記録との一致を必須にします。句との対応は登録しておらず、研究データの写真12枚の件数には含めません。
+
 川柳相談自体は公開対象です。この分類は「本人の発話を一切含まない」という意味ではありません。通常対話から公開本文を推測・生成することはせず、相談と記録された原文を使います。
 
 ## 更新
@@ -29,19 +31,40 @@ Python 3とNode.jsを使います。必要な公開カタログは本体の既�
 ./dogido-rust/cargo.sh build --locked --lib
 ```
 
-公開リポジトリ側で、元の保存先を引数として指定します。元データは読み取りだけです。
+公開リポジトリ側で、元の保存先を引数として指定します。元データは読み取りだけです。先に本体の本棚で研究保存先が「保全済み」になっていることを確認します。書き出し先は毎回新しく作り、消えた画像を前回分から持ち越さないようにします。
 
 ```sh
+mkdir -p .preview
 python3 -B scripts/export_catalog.py --upstream ../DokiDoki-Dogido --output .preview/catalog.json
-python3 -B scripts/export_public.py --archive /path/to/research-archive --memory /path/to/runtime-memory --catalog-json .preview/catalog.json --exclude-dialogue docs/publication-exclusions.json --output site
+record_export_dir=$(mktemp -d .preview/records-XXXXXX)
+python3 -B scripts/export_public.py --archive /path/to/research-archive --memory /path/to/runtime-memory --catalog-json .preview/catalog.json --exclude-dialogue docs/publication-exclusions.json --output "$record_export_dir"
+python3 -B scripts/export_public.py --validate-site "$record_export_dir"
+```
+
+新規・変更分の相談本文と画像を確認し、必要な除外IDと `docs/image-review.json` を更新します。確認後、候補の `data/` 一式と `bootstrap.js` で `site/data/` と `site/bootstrap.js` を置き換えて、次を実行します。古い画像との追加・結合はしません。
+
+```sh
 python3 -B -m unittest discover -s tests -p 'test_*.py' -v
 node --test tests/*.test.cjs
 python3 -B scripts/check_site.py
 ```
 
-新しい画像と公開本文を確認し、`docs/image-review.json` の確認記録を更新して、差分をレビューしてからコミット・pushします。`docs/publication-exclusions.json` は本文を含まない公開用IDの除外記録です。初回確認で見つかった相談終了後の通常対話1往復を除いています。元アーカイブや通常対話ログをこのリポジトリへ置かないでください。複数の保存snapshotがある場合は、書き出し処理が指定・選別を求めることがあります。hashの辞書順を新旧の判定には使いません。
+差分をレビューしてからコミット・pushします。`docs/publication-exclusions.json` は本文を含まない公開用IDの除外記録です。初回確認で見つかった相談終了後の通常対話1往復を除いています。元アーカイブや通常対話ログをこのリポジトリへ置かないでください。
 
 `main` へのpushで検証が走り、成功した `site/` だけをGitHub Pagesへ公開します。CIに私有アーカイブや対話ログを渡しません。CIは公開済み投影と合成テストで公開境界を検査します。
+
+## 複数の保存版からの更新
+
+2026-10-24に、同じ句の保存snapshotが増えた場合の更新に対応しました。CLIの引数は同じです。
+
+- `--memory` 配下の `bookshelf/state.json` にある既存の `researchSnapshots` から、本体が最後に保全した版を選びます。`researchStorage` が同じarchive IDで `ready`、句ID・SHA-256・保存先が一致することを確認し、実ファイルの内容hashとidentityも照合します。更新時刻やhashの辞書順では新旧を判定しません。
+- 原句・現在句・推敲履歴・相談・材料・写真は、その選択版だけを使います。過去の保存版を混ぜず、最新の選択版で消えた相談・写真や削除句を復活させません。公開する相談の元ログ照合と、通常対話・私的情報の除外は維持します。同じ相談IDに通常対話または非公開の元ログが重複していれば停止します。
+- 除外IDは、相談や句が削除されてもmanifestに残します。選択版にないIDは、hashと句の同一性を確認した旧版で存在だけを検査します。その本文は公開に使いません。未知ID・重複IDは引き続きエラーです。`publication.excluded.reviewedDialogueTurns` は今回の選択版で実際に除いた往復数で、manifestの全ID数より小さくなることがあります。
+- 同じアーカイブの台帳がある場合は、未保全、参照先の欠損、句の不足、書き出し中の台帳変更で出力前に停止します。別archive IDの台帳がある場合も停止します。台帳のない旧コピーは各句が一版だけなら読めます。複数版で台帳がない場合は `snapshot_selection_required` となるため、元記録を削らず、本体の保全完了と対応する `--memory` を確認します。
+
+合成データによるPythonテスト50件、Nodeテスト6件と、現在の公開データのサイト整合検査を確認済みです。SSD上の最新記録を公開し直したことを示す検査ではありません。
+
+追加の静的画像を含む配布検査では、Python52件・Node6件とサイト41ファイルの整合検査が成功しました。未確認画像や画像の差替えを止める検査も維持しています。
 
 ## UIの出所
 

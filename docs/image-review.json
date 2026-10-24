@@ -1,6 +1,6 @@
 {
   "reviewedAt": "2026-10-24",
-  "scope": "original archive PNG pixels; no ordinary dialogue or real-world personal information observed",
+  "scope": "original archive PNG pixels and explicitly listed static PNG assets; no ordinary dialogue or real-world personal information observed",
   "gameCoordinateHudImages": 4,
   "images": [
     {
@@ -50,6 +50,15 @@
     {
       "sha256": "ba699e9cbfbab02be3b1d715e33b45a1c18e713030f3739d10fc64265f2faae3",
       "review": "approved_for_initial_publication"
+    },
+    {
+      "path": "assets/dogido_2026-10-22_09.35.09.png",
+      "sha256": "8334a036a4ac9fce42aa9d24699ebab8c5b8a0f373e1bef8ac66b88307cd51ea",
+      "width": 854,
+      "height": 480,
+      "reviewedAt": "2026-10-24",
+      "review": "approved_for_initial_publication",
+      "note": "Minecraft scenery and character; no dialogue or personal information displayed. PNG contains only IHDR, IDAT and IEND chunks. Original path and bytes preserved."
     }
   ]
 }

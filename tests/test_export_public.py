@@ -8,6 +8,7 @@ from pathlib import Path
 import struct
 import tempfile
 import unittest
+from unittest.mock import patch
 import zlib
 from contextlib import redirect_stderr
 
@@ -73,18 +74,35 @@ class Fixture:
     def write_json(path, value):
         path.write_bytes(public.encoded(value))
 
-    def write_logs(self, extra_links=()):
+    def write_logs(self, extra_links=(), extra_origins=()):
         (self.long / "haiku_workshop_turns.jsonl").write_bytes(public.encoded(self.workshop) + b"".join(public.encoded(r) for r in extra_links))
         ordinary = {"type": "dialogue_event", "kind": "player_chat", "text": SECRET, "details": {"player_text": SECRET, "dogido_text": SECRET}}
-        (self.short / "current_session.jsonl").write_bytes(public.encoded(ordinary) + public.encoded(self.origin))
+        (self.short / "current_session.jsonl").write_bytes(public.encoded(ordinary) + public.encoded(self.origin) + b"".join(public.encoded(row) for row in extra_origins))
 
-    def snapshot(self):
-        for old in self.snapshots.glob("*.json"):
-            old.unlink()
+    def snapshot(self, retain=False, select=False):
+        if not retain:
+            for old in self.snapshots.glob("*.json"):
+                old.unlink()
         raw = public.encoded({"identity": self.identity, "record": self.record})
         path = self.snapshots / (public.digest(raw) + ".json")
         path.write_bytes(raw)
+        if select:
+            self.select(path)
         return path
+
+    def select(self, path):
+        state = {"researchStorage": {"state": "ready", "archiveId": ARCHIVE_ID}, "researchSnapshots": {
+            self.identity["poem_id"]: {"archive_id": ARCHIVE_ID, "poem_id": self.identity["poem_id"],
+                                      "sha256": path.stem, "relative_path": path.relative_to(self.archive).as_posix()}}}
+        target = self.memory / "bookshelf/state.json"
+        target.parent.mkdir(exist_ok=True)
+        self.write_json(target, state)
+        return state
+
+    def exclusions(self, *ids):
+        target = self.root / "reviewed-exclusions.json"
+        self.write_json(target, {"schemaVersion": 1, "dialogueIds": list(ids)})
+        return target
 
     def set_image(self, contents):
         sha = public.digest(contents)
@@ -275,6 +293,210 @@ class PublicExportTests(unittest.TestCase):
         second = first.read_bytes() + b" "
         (self.f.snapshots / (public.digest(second) + ".json")).write_bytes(second)
         self.assert_stopped("snapshot_selection_required")
+
+    def test_index_selects_revision_and_added_dialogue_once_regardless_of_file_order(self):
+        first = self.f.snapshot()
+        revision = copy.deepcopy(self.f.record["original"])
+        revision.update(haiku_id="haiku-one", source="player_line_confirmed", created_at="2026-10-24T00:01:00Z")
+        revision["lines"][1].update(surface_text="風が通る道", reading_text="かぜがとおるみち")
+        self.f.record.update(current=revision, revisions=[revision])
+        turn = {**self.f.dialogue, "turnId": "second-turn", "eventId": "second-event", "player": "直した句を見せて", "dogido": "この句になったで。"}
+        origin = copy.deepcopy(self.f.origin)
+        origin.update(event_id=turn["eventId"])
+        origin["details"].update(input_turn_id=turn["turnId"], player_text=turn["player"], dogido_text=turn["dogido"])
+        self.f.record["dialogue"].append(turn)
+        self.f.write_logs(extra_origins=[origin])
+        chosen = self.f.snapshot(retain=True, select=True)
+        # 内容hashの前後と更新時刻の両方で、台帳と異なる版を「最新」に見せる。
+        for value in range(1000):
+            candidate = first.read_bytes() + (" " * value).encode()
+            sha = public.digest(candidate)
+            if sha > chosen.stem:
+                other = self.f.snapshots / (sha + ".json")
+                other.write_bytes(candidate)
+                os.utime(other, (2000000000, 2000000000))
+                break
+        else:
+            self.fail("could not construct an out-of-order hash")
+        os.utime(chosen, (1, 1))
+        data, _ = self.f.build()
+        poem = data["poems"][0]
+        self.assertEqual(poem["lines"][1], "風が通る道")
+        self.assertEqual(len(poem["history"]), 1)
+        self.assertEqual([row["player"] for row in poem["dialogue"]], [self.f.dialogue["player"], turn["player"]])
+        self.assertNotIn(SECRET, public.encoded(data).decode())
+
+    def test_selected_version_does_not_restore_removed_dialogue_materials_or_photos(self):
+        self.f.record["dialogue"] = []
+        self.f.record["photos"] = {"references": [], "slots": [], "originalId": None}
+        self.f.materials["source_atoms"] = []
+        self.f.materials["line_sources"] = []
+        self.f.snapshot(retain=True, select=True)
+        data, images = self.f.build()
+        self.assertEqual(data["poems"][0]["dialogue"], [])
+        self.assertEqual(data["poems"][0]["materials"]["source_atoms"], [])
+        self.assertEqual(data["photos"]["items"], [])
+        self.assertEqual(images, {})
+
+    def test_deleted_selected_version_and_historical_exclusion_do_not_resurrect(self):
+        manifest = self.f.exclusions(public.dialogue_id(self.f.record["id"], self.f.dialogue))
+        self.f.record["deletedFromBookshelf"] = True
+        self.f.record["dialogue"] = []
+        self.f.snapshot(retain=True, select=True)
+        data, images = public.build(self.f.archive, self.f.memory, exported_at=AT, exclude_dialogue=manifest)
+        self.assertEqual(data["poems"], [])
+        self.assertEqual(images, {})
+        self.assertEqual(data["publication"]["excluded"]["deletedPoems"], 1)
+        self.assertEqual(data["publication"]["excluded"]["reviewedDialogueTurns"], 0)
+        self.assertEqual(len(public.load_exclusions(manifest)), 1)
+
+    def test_deleted_poem_with_legacy_dialogue_identity_does_not_block_updates(self):
+        manifest = self.f.exclusions(public.dialogue_id(self.f.record["id"], self.f.dialogue))
+        self.f.record["deletedFromBookshelf"] = True
+        self.f.record["dialogue"].append({**self.f.dialogue, "turnId": None})
+        self.f.snapshot(retain=True, select=True)
+        for exclusions in (None, manifest):
+            with self.subTest(has_exclusion=exclusions is not None):
+                data, images = public.build(self.f.archive, self.f.memory, exported_at=AT, exclude_dialogue=exclusions)
+                self.assertEqual(data["poems"], [])
+                self.assertEqual(images, {})
+                self.assertEqual(data["publication"]["excluded"]["deletedPoems"], 1)
+
+    def test_exclusion_survives_disappearance_restoration_and_private_text_change(self):
+        manifest = self.f.exclusions(public.dialogue_id(self.f.record["id"], self.f.dialogue))
+        for turns in ([], [self.f.dialogue], [{**self.f.dialogue, "player": SECRET}]):
+            with self.subTest(turns=len(turns)):
+                self.f.record["dialogue"] = turns
+                self.f.snapshot(retain=True, select=True)
+                data, _ = public.build(self.f.archive, self.f.memory, exported_at=AT, exclude_dialogue=manifest)
+                self.assertEqual(data["poems"][0]["dialogue"], [])
+                self.assertEqual(data["publication"]["excluded"]["reviewedDialogueTurns"], len(turns))
+                self.assertNotIn(SECRET, public.encoded(data).decode())
+
+    def test_historical_exclusion_requires_hash_identity_and_record_integrity(self):
+        manifest = self.f.exclusions(public.dialogue_id(self.f.record["id"], self.f.dialogue))
+        old = self.f.snapshot()
+        self.f.record["dialogue"] = []
+        self.f.snapshot(retain=True, select=True)
+        raw = old.read_bytes()
+        old.write_bytes(raw + b" ")
+        self.assert_stopped("snapshot_hash_mismatch", lambda: public.build(self.f.archive, self.f.memory, exclude_dialogue=manifest))
+        old.unlink()
+        wrapper = public.decode(raw)
+        wrapper["record"]["id"] = "wrong-poem"
+        changed = public.encoded(wrapper)
+        (self.f.snapshots / (public.digest(changed) + ".json")).write_bytes(changed)
+        self.assert_stopped("snapshot_record_mismatch", lambda: public.build(self.f.archive, self.f.memory, exclude_dialogue=manifest))
+
+    def test_unready_index_never_falls_back_to_older_or_single_snapshot(self):
+        chosen = self.f.snapshot(select=True)
+        for state in ("pending", "error", "offline", "unconfigured"):
+            index = self.f.select(chosen)
+            index["researchStorage"]["state"] = state
+            self.f.write_json(self.f.memory / "bookshelf/state.json", index)
+            self.assert_stopped("research_storage_not_ready", self.f.export)
+            self.assertFalse(self.f.output.exists())
+
+    def test_foreign_archive_index_is_not_treated_as_a_legacy_unindexed_copy(self):
+        chosen = self.f.snapshot(select=True)
+        for state in ("ready", "pending", "error"):
+            with self.subTest(state=state):
+                index = self.f.select(chosen)
+                index["researchStorage"].update(state=state, archiveId="other-archive")
+                index["researchSnapshots"][self.f.record["id"]]["archive_id"] = "other-archive"
+                self.f.write_json(self.f.memory / "bookshelf/state.json", index)
+                self.assert_stopped("snapshot_index_archive_mismatch", self.f.export)
+                self.assertFalse(self.f.output.exists())
+
+    def test_index_reference_identity_path_hash_and_missing_files_are_checked(self):
+        chosen = self.f.snapshot(select=True)
+        mutations = [
+            ("poem_id", "wrong", "snapshot_reference_poem_mismatch"),
+            ("archive_id", "other", "snapshot_reference_missing"),
+            ("relative_path", "../private.json", "snapshot_reference_path_mismatch"),
+            ("sha256", "bad", "invalid_snapshot_reference_hash"),
+        ]
+        for key, value, error in mutations:
+            with self.subTest(key=key):
+                index = self.f.select(chosen)
+                index["researchSnapshots"][self.f.record["id"]][key] = value
+                self.f.write_json(self.f.memory / "bookshelf/state.json", index)
+                self.assert_stopped(error, self.f.export)
+                self.assertFalse(self.f.output.exists())
+        self.f.select(chosen)
+        chosen.unlink()
+        self.assert_stopped("selected_snapshot_missing", self.f.export)
+
+    def test_indexed_archive_cannot_silently_omit_a_poem(self):
+        chosen = self.f.snapshot(select=True)
+        index = self.f.select(chosen)
+        index["researchSnapshots"]["session:s:missing"] = {"archive_id": ARCHIVE_ID}
+        self.f.write_json(self.f.memory / "bookshelf/state.json", index)
+        self.assert_stopped("indexed_poem_missing_from_archive", self.f.export)
+        self.assertFalse(self.f.output.exists())
+
+    def test_selected_new_dialogue_failure_does_not_use_valid_old_snapshot(self):
+        self.f.snapshot(select=True)
+        self.f.record["current"] = copy.deepcopy(self.f.record["current"])
+        self.f.record["current"]["lines"][0]["surface_text"] = "新しい句"
+        self.f.snapshot(retain=True, select=True)
+        for mode in ("ordinary", "private", "mismatch", "pending"):
+            with self.subTest(mode=mode):
+                origin = copy.deepcopy(self.f.origin)
+                if mode == "ordinary":
+                    origin["kind"] = "player_chat"
+                elif mode == "private":
+                    origin["details"]["workshop_record_private"] = True
+                elif mode == "mismatch":
+                    origin["details"]["player_text"] = SECRET
+                else:
+                    self.f.dialogue["delivery"] = "pending"
+                    self.f.snapshot(retain=True, select=True)
+                (self.f.short / "current_session.jsonl").write_bytes(public.encoded(origin))
+                self.assert_stopped("dialogue_origin_not_found|dialogue_origin_mismatch|dialogue_delivery_not_confirmed", self.f.export)
+                self.assertFalse(self.f.output.exists())
+
+    def test_conflicting_private_or_ordinary_origin_cannot_be_hidden_by_public_duplicate(self):
+        for owner, flag in (("top", "private"), ("top", "workshop_record_private"), ("details", "private"), ("details", "workshop_record_private"), ("top", "kind")):
+            with self.subTest(owner=owner, flag=flag):
+                origin = copy.deepcopy(self.f.origin)
+                target = origin if owner == "top" else origin["details"]
+                target[flag] = "player_chat" if flag == "kind" else True
+                self.f.write_logs(extra_origins=[origin])
+                self.assert_stopped("dialogue_origin_not_found", self.f.export)
+                self.assertFalse(self.f.output.exists())
+
+    def test_changed_index_stops_before_any_output(self):
+        self.f.snapshot(select=True)
+        original = public.SnapshotIndex.read
+        calls = []
+        def changed(index):
+            calls.append(True)
+            raw = original(index)
+            return raw if len(calls) == 1 else raw + b" "
+        with patch.object(public.SnapshotIndex, "read", changed):
+            self.assert_stopped("snapshot_index_changed_retry", self.f.export)
+        self.assertFalse(self.f.output.exists())
+
+    def test_multiple_snapshots_export_is_deterministic_and_read_only(self):
+        self.f.record["player"]["note"] += " updated"
+        self.f.snapshot(retain=True, select=True)
+        def fingerprint(root):
+            return {str(p.relative_to(root)): public.digest(p.read_bytes()) for p in root.rglob("*") if p.is_file()}
+        before = [fingerprint(p) for p in [self.f.archive, self.f.memory]]
+        self.assertEqual(self.f.export(), self.f.export())
+        self.assertEqual([fingerprint(p) for p in [self.f.archive, self.f.memory]], before)
+
+    def test_removed_photo_requires_fresh_output_without_changing_old_publication(self):
+        self.f.export()
+        previous = (self.f.output / "data/research.json").read_bytes()
+        self.f.record["photos"] = {"references": [], "slots": [], "originalId": None}
+        self.f.snapshot(retain=True, select=True)
+        self.assert_stopped("stale_or_unexpected_public_data_use_fresh_output", self.f.export)
+        self.assertEqual((self.f.output / "data/research.json").read_bytes(), previous)
+        fresh = self.f.root / "fresh-site"
+        public.export(self.f.archive, self.f.memory, fresh, exported_at=AT)
+        self.assertEqual(public.validate_site(fresh)["images"], 0)
 
     def test_image_hash_and_bundle_record_hash_are_verified(self):
         (self.f.bundle / "image.png").write_bytes(png() + b"changed")
