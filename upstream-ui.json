@@ -1,0 +1,42 @@
+{
+  "upstream": "https://github.com/yukincom/DokiDoki_Dogido",
+  "commit": "7ddc1eee70c46df6a1c6004d937496d438dbd94b",
+  "sourceDirectory": "tools/dogido-library",
+  "sourceSnapshot": "Current working-tree UI, including bookshelf changes not yet committed upstream.",
+  "files": {
+    "styles.css": "040a0f31b18b81a1d3701a26457c5d9fe94ea7840ff96618b70d91a37c2cf7dc",
+    "photo-layout.css": "f33adb6ee0357183702623a5aaec17e3d58523a330308c21bc73c5d1e3f922eb",
+    "poem-metadata.css": "061e5e34d1c7e316b1033ef3d639020b0ac5a0014fa1230900cb407f4c8e7b0b",
+    "library-navigation.css": "8ce68fef5e05ffdd4076c9d6d3c63851f72d5fdf344c7d0883603f79a3c66298",
+    "readability.css": "9ece1cf5ca742c9e7bd20d63c7bdb16b3cbb07f9efffe36415e128c38f466850",
+    "cover.css": "bf9e83101bffd96d7605c7556de3e384376af186da2691e41ae3763ba0682e0a",
+    "photo-library.css": "02f9a12c3a2195e142688fc46873781f915cba4b0382c75bd473f4e91cc0b5c1",
+    "poem-record.css": "aa56cb03cb58ae60ec5015740a83c6c124ecd61c1e2308f212695720848cb9ca",
+    "index.html": "d757bc70040e0a5bfabae434caa5f8d0758e0861eb0b64630e4e07d05b748f0b",
+    "app.js": "27b162ebfda2c117b24288e2f403324ae762e3b6c0b0c70c5603f27293d43518",
+    "model.js": "161360f248e4ff135b9f07b420fb9e9c2ddc517bdcc3309ffec1db9eabed0e7a",
+    "poem-record.js": "42e3287c09a589a69f67f1416e28da39598cfb08e61cde9a0d828d44af418189",
+    "assets/bookshelf-open-scroll-v4.png": "95426e18ba0143c72a4b17dd793248f87459cf1ece1879e5f5ea5309479a882b",
+    "assets/catalog-cover-pixel-v1.png": "0d17442f45860829ec45fd48394e3616897e8307134fff8df908425077ec802a",
+    "assets/photos-cover-pixel-v1.png": "0dc51ac7b835e0f3428df1e940a58ddb093ae128534207e7fd198ca71f401fdc",
+    "assets/character.png": "c25016db04b1c20a3091859e91bf25c5f243feca3fe67b51f80c537b1364086c",
+    "assets/bookshelf-cover-v1.png": "17593caf395f427216b13b1053037c4a483e07f764cefd6372f70b1e5057f776",
+    "assets/bookshelf-app-icon.png": "b8c439bc94278fa9e481fec659c876cc8e29680f4e31f1e911528cdff4c6f332",
+    "assets/poems-cover-pixel-v1.png": "5d6d6abf5b34b68a767fbe7fe95456a218aaa25cf4fb58a71b08af104aa20356",
+    "photo-library.js": "0aa9196aae351c2fa2c0a8a4f4ed146eef5cf9487ba23125d74bc9a81bc6f907",
+    "photo-library-model.js": "8958fe86659324f7ec97f167df7a6972d8930c2b83e7133d293ea69374532ccc"
+  },
+  "adaptedFiles": [
+    "index.html",
+    "app.js",
+    "model.js",
+    "poem-record.js",
+    "photo-library.js",
+    "photo-library-model.js"
+  ],
+  "newFiles": [
+    "site/public-library.css",
+    "site/public-library.js",
+    "tests/ui.test.cjs"
+  ]
+}

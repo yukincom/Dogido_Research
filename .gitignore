@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.env
+.env.*
+.dogido_memory/
+private/
+raw/
+.preview/
+node_modules/

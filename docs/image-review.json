@@ -1,0 +1,55 @@
+{
+  "reviewedAt": "2026-10-24",
+  "scope": "original archive PNG pixels; no ordinary dialogue or real-world personal information observed",
+  "gameCoordinateHudImages": 4,
+  "images": [
+    {
+      "sha256": "8ba3b185f17fe12c5230897697e79d8fe765c9cc72414d9596b02fe08bef18a3",
+      "review": "approved_for_initial_publication"
+    },
+    {
+      "sha256": "9fc3d9d0b025c9cba5542a2bb98a3582780cf0544282afeecbe230aa822f6ec2",
+      "review": "approved_for_initial_publication"
+    },
+    {
+      "sha256": "c8f830ce53d7e3d2c63c61cc7c7791af193c080dd89aa76e6f7d073698460bfb",
+      "review": "approved_for_initial_publication"
+    },
+    {
+      "sha256": "d53fcd484e3f0139f5c7cd51c65ff46c2ca810f872f2d7dad7fe369962ef17c0",
+      "review": "approved_for_initial_publication"
+    },
+    {
+      "sha256": "cd91892cb7cf8792c8f5c26076efc8f92a1a439f5111f1f102b4983fe99ca2ec",
+      "review": "approved_for_initial_publication"
+    },
+    {
+      "sha256": "d44fbca51bfd5db74bfaa0e3ce2338721dcf5c2c4b988079c30606be066cdb61",
+      "review": "approved_for_initial_publication"
+    },
+    {
+      "sha256": "d0eeb983f77af0585c4e1d7d541d3915fd8ce85c850cf6fda8c657a0bf0841f7",
+      "review": "approved_for_initial_publication"
+    },
+    {
+      "sha256": "d137517fcd7e4ab83d0095fa9b43b57def5009ce69f700324663f76c50559dd4",
+      "review": "approved_for_initial_publication"
+    },
+    {
+      "sha256": "4a7f491f5c64189523b8d315252281518c5b907527ad80c759f45e501cbdf69d",
+      "review": "approved_for_initial_publication"
+    },
+    {
+      "sha256": "74a2fd50e768ccb152d59efd64321b33c09c304542342e543f7543b713567f1b",
+      "review": "approved_for_initial_publication"
+    },
+    {
+      "sha256": "77e3b63ee8bad396728252670d6f912a72acfe156f822328fd2bf1a5b2746148",
+      "review": "approved_for_initial_publication"
+    },
+    {
+      "sha256": "ba699e9cbfbab02be3b1d715e33b45a1c18e713030f3739d10fc64265f2faae3",
+      "review": "approved_for_initial_publication"
+    }
+  ]
+}

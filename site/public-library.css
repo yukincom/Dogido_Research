@@ -1,0 +1,17 @@
+/* 表紙・見開き・写真カラムは本体のCSSを継承し、公開版の案内だけを加える。 */
+.public-badge{flex-shrink:0;border:1px solid currentColor;padding:3px 8px;color:#d5ddc8;font-size:12px;letter-spacing:.06em;white-space:nowrap}
+.library-cover .public-badge{color:#66715b}
+main>.public-footer,.library-cover main>.public-footer,.library-photos main>.public-footer,.book-intro main>.public-footer{display:flex;flex-direction:column;align-items:center;gap:12px;margin:32px auto 12px;text-align:center;font-size:14px;line-height:1.8;color:var(--muted)}
+.public-footer nav{display:flex;justify-content:center;flex-wrap:wrap;gap:10px 24px}
+.public-footer a{text-underline-offset:4px}
+.public-footer .publication-scope{max-width:780px;font-size:12px}
+.public-photo-download{display:inline-block;margin-top:18px;text-underline-offset:4px}
+.public-photo-missing{padding:30px 16px;color:var(--muted);text-align:center;font-size:15px}
+.public-image-failed{color:var(--muted);font-size:12px;overflow:hidden}
+.album-list-heading>span{font:14px sans-serif;opacity:.8;white-space:nowrap}
+.revision-history{padding-left:26px;margin:12px 0 0}
+.revision-history>li{padding:12px 0;border-bottom:1px dashed var(--line)}
+.revision-history time{font-size:13px;color:var(--muted)}
+.revision-verse{margin-top:8px;font:20px/1.8 var(--serif);white-space:pre-wrap;overflow-wrap:anywhere}
+.public-error{padding:20px;color:#663c2e;border:1px solid #a47f63;background:#fff5df}
+@media(max-width:700px){.topbar{gap:12px;flex-wrap:wrap;height:auto;min-height:66px;padding-top:12px;padding-bottom:12px}.public-badge{margin-left:auto}.header-actions{width:100%;justify-content:flex-end}.workshop-dialogue p{grid-template-columns:1fr;gap:3px}.public-footer nav{gap:10px 16px}}
