@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>ドギドの本棚 — Dogido Research</title>
   <meta name="description" content="ドギドの川柳、推敲と相談の記録、発句の材料や写真を、いつもの本棚で読む公開研究アーカイブ。">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="ドギドの本棚 — Dogido Research">
+  <meta property="og:description" content="Minecraftで川柳を詠む相棒、ドギド。川柳・推敲・相談の記録を公開しています。">
+  <meta property="og:url" content="https://yukincom.github.io/Dogido_Research/">
+  <meta property="og:image" content="https://yukincom.github.io/Dogido_Research/assets/dogido-flyer.jpg">
+  <meta property="og:image:width" content="413">
+  <meta property="og:image:height" content="266">
+  <meta property="og:image:alt" content="ドキドキ ドギド — マイクラ川柳AIのフライヤー">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ドギドの本棚 — Dogido Research">
+  <meta name="twitter:description" content="Minecraftで川柳を詠む相棒、ドギド。川柳・推敲・相談の記録を公開しています。">
+  <meta name="twitter:image" content="https://yukincom.github.io/Dogido_Research/assets/dogido-flyer.jpg">
+  <meta name="twitter:image:alt" content="ドキドキ ドギド — マイクラ川柳AIのフライヤー">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <link rel="icon" href="assets/bookshelf-app-icon.png">
@@ -17,6 +30,7 @@
   <link rel="stylesheet" href="photo-library.css">
   <link rel="stylesheet" href="poem-record.css">
   <link rel="stylesheet" href="public-library.css">
+  <link rel="stylesheet" href="share.css">
   <script defer src="bootstrap.js"></script>
   <script defer src="model.js"></script>
   <script defer src="poem-record.js"></script>
@@ -24,11 +38,15 @@
   <script defer src="photo-library-model.js"></script>
   <script defer src="photo-library.js"></script>
   <script defer src="public-library.js"></script>
+  <script defer src="share-image.js"></script>
+  <script defer src="share.js"></script>
 </head>
 <body class="library-cover">
   <header class="topbar">
     <a class="brand" href="#cover" aria-label="ドギドの本棚・表紙へ"><span class="brand-mark" aria-hidden="true"><img src="assets/bookshelf-open-scroll-v4.png" alt="" width="44" height="44"></span>ドギドの本棚</a><span class="public-badge">公開研究版</span>
-    <div class="header-actions"><nav class="books" aria-label="本を選ぶ"><button data-book="poems" aria-pressed="false">句集</button><button data-book="catalog" aria-pressed="true">あんちょこ</button><button data-book="photos" aria-pressed="false">フォトブック</button></nav></div>
+    <div class="header-actions">
+      <nav class="books" aria-label="本を選ぶ"><button data-book="poems" aria-pressed="false">句集</button><button data-book="catalog" aria-pressed="true">あんちょこ</button><button data-book="photos" aria-pressed="false">フォトブック</button></nav>
+    </div>
   </header>
   <main>
     <noscript><p class="public-error">本棚を開くにはJavaScriptを有効にしてください。<a href="data/research.json">公開データのJSONはこちら</a>から読めます。</p></noscript>
@@ -39,6 +57,14 @@
         <button class="cover-book cover-catalog" data-book="catalog">あんちょこ<span aria-hidden="true">→</span></button>
         <button class="cover-book cover-photos" data-book="photos">フォトブック<span aria-hidden="true">→</span></button>
       </nav>
+      <div class="library-share" role="group" aria-label="本棚を共有">
+        <button type="button" data-share="x" aria-label="Xで本棚を共有" title="Xで本棚を共有" aria-haspopup="dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3L12 14.6 5.5 22H2.3l7.8-8.9L1.8 2h6.5l4.5 6.8L18.9 2Zm-1.1 18h1.7L7.3 3.9H5.5L17.8 20Z"/></svg>
+        </button>
+        <button type="button" data-share="instagram" aria-label="Instagramで本棚を共有" title="Instagramで本棚を共有" aria-haspopup="dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5Zm0 2a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3H7Zm5 3a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z"/><circle cx="17.5" cy="6.5" r="1.3"/></svg>
+        </button>
+      </div>
     </section>
     <section id="book-cover" class="book-cover-page" aria-labelledby="book-cover-title" hidden>
       <h1 id="book-cover-title"></h1>
@@ -51,5 +77,19 @@
     </section>
     <footer class="public-footer"><p id="publication-summary">川柳と制作記録の公開アーカイブ</p><nav aria-label="研究データとドギドへのリンク"><a href="data/research.json" download>公開データをダウンロード</a><a href="https://github.com/yukincom/Dogido_Research">GitHub</a><a href="https://github.com/yukincom/DokiDoki_Dogido#readme">ドギドを試す ↗</a></nav><p class="publication-scope">川柳の相談・講評を公開しています。通常の対話と個人メモは含みません。しおりはこの閲覧中だけ有効です。</p></footer>
   </main>
+  <dialog id="share-dialog" class="share-dialog" aria-labelledby="share-title" aria-describedby="share-help">
+    <div class="share-heading"><h2 id="share-title">本棚を共有</h2><button type="button" id="share-close" aria-label="共有画面を閉じる">×</button></div>
+    <img class="share-flyer" src="assets/dogido-flyer.jpg" alt="ドキドキ ドギド — マイクラ川柳AIのフライヤー" width="413" height="266">
+    <p id="share-help"></p>
+    <label class="share-caption-label" for="share-caption">投稿文と本棚のリンク</label>
+    <textarea id="share-caption" readonly rows="5" spellcheck="false"></textarea>
+    <div class="share-actions">
+      <button type="button" id="share-native" class="share-primary" hidden>画像とリンクを共有</button>
+      <button type="button" id="share-copy">投稿文とリンクをコピー</button>
+      <a href="assets/dogido-flyer.jpg" download="dogido-flyer.jpg">画像を保存</a>
+      <a id="share-social" href="https://x.com/intent/tweet" target="_blank" rel="noopener noreferrer">Xの投稿画面を開く ↗</a>
+    </div>
+    <p id="share-status" role="status" aria-live="polite"></p>
+  </dialog>
 </body>
 </html>

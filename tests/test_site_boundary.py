@@ -65,6 +65,18 @@ class SiteBoundary(unittest.TestCase):
         with self.assertRaisesRegex(ExportError, "upstream_visual_asset_changed"):
             check(self.root)
 
+    def test_unreviewed_share_image_cannot_be_published(self):
+        (self.root / "site/assets/dogido-flyer.jpg").write_bytes(b"unreviewed")
+        with self.assertRaisesRegex(ExportError, "share_image_review_mismatch"):
+            check(self.root)
+
+    def test_shared_file_cannot_differ_from_preview(self):
+        path = self.root / "site/share-image.js"
+        source = path.read_text()
+        path.write_text(source.replace('"base64":"', '"base64":"AAAA', 1))
+        with self.assertRaisesRegex(ExportError, "share_image_bundle_mismatch"):
+            check(self.root)
+
 
 if __name__ == "__main__":
     unittest.main()

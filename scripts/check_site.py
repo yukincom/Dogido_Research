@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from html.parser import HTMLParser
+import base64
 import json
 from pathlib import Path
 import re
@@ -21,6 +22,7 @@ class References(HTMLParser):
         super().__init__()
         self.references = []
         self.scripts = []
+        self.metadata = {}
 
     def handle_starttag(self, tag, attrs):
         values = dict(attrs)
@@ -29,6 +31,8 @@ class References(HTMLParser):
                 self.references.append(values[key])
         if tag == "script" and values.get("src"):
             self.scripts.append(values["src"])
+        if tag == "meta":
+            self.metadata[values.get("property") or values.get("name")] = values.get("content")
 
 
 def check(root: Path) -> dict:
@@ -66,13 +70,29 @@ def check(root: Path) -> dict:
     for value in page.references:
         url = urlsplit(value)
         if url.scheme or url.netloc:
-            require(url.scheme == "https" and url.netloc == "github.com", "unexpected_external_page_link")
+            require((url.scheme == "https" and url.netloc == "github.com") or value in {
+                "https://x.com/intent/tweet", "https://www.instagram.com/"
+            }, "unexpected_external_page_link")
             continue
         if not url.path:
             continue
         require(not url.path.startswith("/") and ".." not in Path(url.path).parts, "nonrelative_site_link")
         require((site / url.path).is_file(), "broken_site_link")
     require("connect-src 'none'" in html and "form-action 'none'" in html, "readonly_browser_policy_missing")
+    # 共有は利用者が指定したフライヤーだけ。画面表示・保存・OSへ渡すFileを同じbytesにする。
+    share_review = json.loads((root / "docs/share-image-review.json").read_text(encoding="utf-8"))
+    require(share_review["path"] == "assets/dogido-flyer.jpg", "unexpected_share_image")
+    flyer = (site / share_review["path"]).read_bytes()
+    require(digest(flyer) == share_review["sha256"], "share_image_review_mismatch")
+    source = (site / "share-image.js").read_text(encoding="utf-8")
+    marker = "window.DOGIDO_SHARE_IMAGE = "
+    require(source.count(marker) == 1 and source.endswith(";\n"), "invalid_share_image_bundle")
+    asset = json.loads(source.split(marker, 1)[1][:-2])
+    require(set(asset) == {"filename", "type", "base64"} and asset["filename"] == "dogido-flyer.jpg" and asset["type"] == "image/jpeg", "invalid_share_image_bundle")
+    require(base64.b64decode(asset["base64"], validate=True) == flyer, "share_image_bundle_mismatch")
+    public_url = "https://yukincom.github.io/Dogido_Research/"
+    require(page.metadata.get("og:url") == public_url, "unexpected_share_url")
+    require(all(page.metadata.get(key) == public_url + share_review["path"] for key in ("og:image", "twitter:image")), "share_preview_image_mismatch")
     for script in page.scripts:
         if script == "bootstrap.js":
             continue
