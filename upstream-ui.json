@@ -39,7 +39,6 @@
     "site/public-library.js",
     "site/share.css",
     "site/share.js",
-    "site/share-image.js",
     "site/assets/dogido-flyer.jpg",
     "tests/share.test.cjs",
     "tests/ui.test.cjs"

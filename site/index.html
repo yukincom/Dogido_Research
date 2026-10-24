@@ -38,7 +38,6 @@
   <script defer src="photo-library-model.js"></script>
   <script defer src="photo-library.js"></script>
   <script defer src="public-library.js"></script>
-  <script defer src="share-image.js"></script>
   <script defer src="share.js"></script>
 </head>
 <body class="library-cover">
@@ -58,11 +57,8 @@
         <button class="cover-book cover-photos" data-book="photos">フォトブック<span aria-hidden="true">→</span></button>
       </nav>
       <div class="library-share" role="group" aria-label="本棚を共有">
-        <button type="button" data-share="x" aria-label="Xで本棚を共有" title="Xで本棚を共有" aria-haspopup="dialog">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3L12 14.6 5.5 22H2.3l7.8-8.9L1.8 2h6.5l4.5 6.8L18.9 2Zm-1.1 18h1.7L7.3 3.9H5.5L17.8 20Z"/></svg>
-        </button>
-        <button type="button" data-share="instagram" aria-label="Instagramで本棚を共有" title="Instagramで本棚を共有" aria-haspopup="dialog">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5Zm0 2a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3H7Zm5 3a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z"/><circle cx="17.5" cy="6.5" r="1.3"/></svg>
+        <button type="button" id="share-open" aria-label="共有" title="共有" aria-haspopup="dialog" aria-controls="share-dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2a4 4 0 1 1-3.56 5.82L8.9 10.42a4.04 4.04 0 0 1 0 3.16l4.54 2.6a4 4 0 1 1-.99 1.74l-4.55-2.6a4 4 0 1 1 0-6.64l4.55-2.6A4 4 0 0 1 17 2Z"/></svg>
         </button>
       </div>
     </section>
@@ -77,19 +73,19 @@
     </section>
     <footer class="public-footer"><p id="publication-summary">川柳と制作記録の公開アーカイブ</p><nav aria-label="研究データとドギドへのリンク"><a href="data/research.json" download>公開データをダウンロード</a><a href="https://github.com/yukincom/Dogido_Research">GitHub</a><a href="https://github.com/yukincom/DokiDoki_Dogido#readme">ドギドを試す ↗</a></nav><p class="publication-scope">川柳の相談・講評を公開しています。通常の対話と個人メモは含みません。しおりはこの閲覧中だけ有効です。</p></footer>
   </main>
-  <dialog id="share-dialog" class="share-dialog" aria-labelledby="share-title" aria-describedby="share-help">
-    <div class="share-heading"><h2 id="share-title">本棚を共有</h2><button type="button" id="share-close" aria-label="共有画面を閉じる">×</button></div>
+  <dialog id="share-dialog" class="share-dialog" aria-labelledby="share-title">
+    <div class="share-heading"><h2 id="share-title">共有</h2><button type="button" id="share-close" aria-label="共有画面を閉じる">×</button></div>
     <img class="share-flyer" src="assets/dogido-flyer.jpg" alt="ドキドキ ドギド — マイクラ川柳AIのフライヤー" width="413" height="266">
-    <p id="share-help"></p>
-    <label class="share-caption-label" for="share-caption">投稿文と本棚のリンク</label>
-    <textarea id="share-caption" readonly rows="5" spellcheck="false"></textarea>
-    <div class="share-actions">
-      <button type="button" id="share-native" class="share-primary" hidden>画像とリンクを共有</button>
-      <button type="button" id="share-copy">投稿文とリンクをコピー</button>
-      <a href="assets/dogido-flyer.jpg" download="dogido-flyer.jpg">画像を保存</a>
-      <a id="share-social" href="https://x.com/intent/tweet" target="_blank" rel="noopener noreferrer">Xの投稿画面を開く ↗</a>
+    <div class="share-actions" role="group" aria-label="共有方法を選ぶ">
+      <a id="share-x" href="https://x.com/intent/tweet" target="_blank" rel="noopener noreferrer" aria-label="Xで共有">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3L12 14.6 5.5 22H2.3l7.8-8.9L1.8 2h6.5l4.5 6.8L18.9 2Zm-1.1 18h1.7L7.3 3.9H5.5L17.8 20Z"/></svg><span>X</span>
+      </a>
+      <button type="button" id="share-copy" aria-label="リンクをコピー">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-2V5H9V3Zm-6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Zm1 3v10h10V10H4Z"/></svg><span>リンクコピー</span>
+      </button>
     </div>
     <p id="share-status" role="status" aria-live="polite"></p>
+    <input id="share-url" type="url" readonly aria-label="共有するリンク" hidden>
   </dialog>
 </body>
 </html>

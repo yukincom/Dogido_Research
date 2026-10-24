@@ -70,11 +70,11 @@ class SiteBoundary(unittest.TestCase):
         with self.assertRaisesRegex(ExportError, "share_image_review_mismatch"):
             check(self.root)
 
-    def test_shared_file_cannot_differ_from_preview(self):
-        path = self.root / "site/share-image.js"
+    def test_share_card_cannot_use_a_different_image(self):
+        path = self.root / "site/index.html"
         source = path.read_text()
-        path.write_text(source.replace('"base64":"', '"base64":"AAAA', 1))
-        with self.assertRaisesRegex(ExportError, "share_image_bundle_mismatch"):
+        path.write_text(source.replace('name="twitter:image" content="https://yukincom.github.io/Dogido_Research/assets/dogido-flyer.jpg"', 'name="twitter:image" content="https://example.com/other.jpg"'))
+        with self.assertRaisesRegex(ExportError, "share_preview_image_mismatch"):
             check(self.root)
 
 
